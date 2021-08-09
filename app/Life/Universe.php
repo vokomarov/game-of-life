@@ -15,17 +15,28 @@ class Universe
     protected $space = [];
 
     /**
+     * @var int
+     */
+    protected $sizeX = 0;
+
+    /**
+     * @var int
+     */
+    protected $sizeY = 0;
+
+    /**
      * An array of cell coordinates that should be alive before first generation
      *
      * @var array
      */
     protected $initialPattern = [];
 
-    public function __construct()
-    {
-
-    }
-
+    /**
+     * Pass an array of arrays (coordinate pairs [x, y]) with cells that should be alive before first generation.
+     *
+     * @param int[][] $pattern
+     * @return $this
+     */
     public function setInitialPattern(array $pattern = []): Universe
     {
         $this->initialPattern = $pattern;
@@ -33,17 +44,33 @@ class Universe
         return $this;
     }
 
+    /**
+     * Init a space with the given sizes.
+     *
+     * Warning! Previous state of space will be lost.
+     *
+     * @param int $height
+     * @param int $width
+     * @return $this
+     */
     public function setSize(int $height, int $width): Universe
     {
+        $this->sizeX = $width;
+        $this->sizeY = $height;
         $this->space = [];
 
-        for ($y = 0; $y < $height; $y++) {
-            $this->space[$y] = array_fill(0, $width, null);
+        for ($y = 0; $y < $this->sizeY; $y++) {
+            $this->space[$y] = array_fill(0, $this->sizeX, null);
         }
 
         return $this;
     }
 
+    /**
+     * Create cell for every space point.
+     *
+     * @return $this
+     */
     public function init(): Universe
     {
         foreach ($this->space as $y => $row) {
@@ -56,19 +83,41 @@ class Universe
         return $this;
     }
 
+    /**
+     * Launch next generation of the universe.
+     *
+     * @return $this
+     */
     public function nextGeneration(): Universe
     {
+        $newSpace = [];
+
         foreach ($this->space as $y => $row) {
+            $newSpace[$y] = [];
+
             foreach ($row as $x => $cell) {
-                $this->getCellByCoordinates($x, $y)
-                     ->live($this->getLiveNeighborsAmount($x, $y));
+                $newSpace[$y][$x] = clone $cell;
+
+                $amount = $this->getLiveNeighborsAmount($x, $y);
+
+                $newSpace[$y][$x]->live($amount);
             }
         }
+
+        $this->space = $newSpace;
 
         return $this;
     }
 
-    public function cells()
+    /**
+     * Retrieve an iterator of all cells of the universe.
+     *
+     * Each iteration will return an array of cell coordinates and the cell itself:
+     *  [x, y, Cell]
+     *
+     * @return \Generator
+     */
+    public function cells(): \Generator
     {
         foreach ($this->space as $y => $row) {
             foreach ($row as $x => $cell) {
@@ -77,7 +126,15 @@ class Universe
         }
     }
 
-    public function getCellByCoordinates(int $x, int $y): Cell
+    /**
+     * Fetch cell by given coordinates or throw an exception
+     *
+     * @param int $x
+     * @param int $y
+     * @return \App\Life\Cell
+     * @throw \RuntimeException
+     */
+    protected function getCellByCoordinates(int $x, int $y): Cell
     {
         $cell = $this->space[$y][$x] ?? null;
 
@@ -88,6 +145,13 @@ class Universe
         return $cell;
     }
 
+    /**
+     * Check if cell by given coordinates should be alive before first generation
+     *
+     * @param int $x
+     * @param int $y
+     * @return bool
+     */
     protected function isCoordinatesPresentInInitialPattern(int $x, int $y): bool
     {
         foreach ($this->initialPattern as $coordinates) {
@@ -101,6 +165,14 @@ class Universe
         return false;
     }
 
+    /**
+     * Calculate amount of live neighbors around a cell by given coordinates.
+     * By neighbors means any cell that placed near given cell horizontally, vertically or diagonally.
+     *
+     * @param int $x
+     * @param int $y
+     * @return int
+     */
     protected function getLiveNeighborsAmount(int $x, int $y): int
     {
         $neighborsRelatedCoordinatesPattern = [
@@ -121,6 +193,14 @@ class Universe
 
             $neighborCoordinateX = $x + $xShift;
             $neighborCoordinateY = $y + $yShift;
+
+            if (
+                $neighborCoordinateX < 0 || $neighborCoordinateY < 0 ||
+                $neighborCoordinateX >= $this->sizeX || $neighborCoordinateY >= $this->sizeY
+            ) {
+                // skip access for the out of world cells
+                continue;
+            }
 
             if ($this->getCellByCoordinates($neighborCoordinateX, $neighborCoordinateY)->isLive()) {
                 $count++;
